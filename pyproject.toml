@@ -15,7 +15,20 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
 ]
-dependencies = []
+dependencies = [
+    "feature-engine>=1.9.0",
+    "joblib>=1.3",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scikit-learn>=1.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "fastcore<1.13",
+    "jupyterlab",
+    "nbdev",
+]
 
 [project.urls]
 Repository = "https://github.com/IshmaelAsab/house_pricing_nbdev"
