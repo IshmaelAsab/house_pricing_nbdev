@@ -1,0 +1,122 @@
+[
+  {
+    "objectID": "core.html",
+    "href": "core.html",
+    "title": "core",
+    "section": "",
+    "text": "This module packages the housing price workflow from script/house-pricing-ml-pipeline.ipynb into a reusable Python API. It keeps the original feature-engine preprocessing pipeline, adds the missing custom transformers, and exposes helpers for loading data, training, evaluating, predicting, submitting, and persisting models.",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#overview",
+    "href": "core.html#overview",
+    "title": "core",
+    "section": "",
+    "text": "This module packages the housing price workflow from script/house-pricing-ml-pipeline.ipynb into a reusable Python API. It keeps the original feature-engine preprocessing pipeline, adds the missing custom transformers, and exposes helpers for loading data, training, evaluating, predicting, submitting, and persisting models.",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#imports-and-configuration",
+    "href": "core.html#imports-and-configuration",
+    "title": "core",
+    "section": "Imports and configuration",
+    "text": "Imports and configuration\nThe constants below mirror the selected features and mappings used by the original pipeline notebook. The default CSV paths point at the local script/ folder in this repository.",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#custom-transformers",
+    "href": "core.html#custom-transformers",
+    "title": "core",
+    "section": "Custom transformers",
+    "text": "Custom transformers\nThe original script imports these from a preprocessors module. Exporting them here makes the pipeline self-contained and serializable as part of this package.\n\nsource\n\nMapper\n\ndef Mapper(\n    variables:str | list[str], mappings:dict[Any, Any], default_value:Any | None=None\n):\n\nMap ordered categorical labels to numeric values.\n\nsource\n\n\nTemporalVariableTransformer\n\ndef TemporalVariableTransformer(\n    variables:str | list[str], reference_variable:str\n):\n\nCalculate elapsed years between a reference year and temporal variables.\n\ntemporal_sample = pd.DataFrame({\"YrSold\": [2010], \"YearRemodAdd\": [2000]})\ntemporal_result = TemporalVariableTransformer([\"YearRemodAdd\"], \"YrSold\").fit_transform(temporal_sample)\nassert temporal_result.loc[0, \"YearRemodAdd\"] == 10\n\nmapping_sample = pd.DataFrame({\"KitchenQual\": [\"TA\", \"Gd\", \"Ex\"]})\nmapping_result = Mapper([\"KitchenQual\"], QUAL_MAPPINGS).fit_transform(mapping_sample)\nassert mapping_result[\"KitchenQual\"].tolist() == [3, 4, 5]",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#data-preparation",
+    "href": "core.html#data-preparation",
+    "title": "core",
+    "section": "Data preparation",
+    "text": "Data preparation\nThese helpers load the CSV files, cast MSSubClass as categorical, select the modeled feature set, and split the target on the log scale used by the model.\n\nsource\n\nsplit_housing_data\n\ndef split_housing_data(\n    data:pd.DataFrame, test_size:float=0.1, random_state:int=0\n)-&gt;tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:\n\nSplit raw housing data into train/validation features and log target values.\n\nsource\n\n\nload_housing_data\n\ndef load_housing_data(\n    path:str | Path | None=None\n)-&gt;pd.DataFrame:\n\nLoad a housing CSV file, defaulting to the repository training data.\n\ntrain_data = load_housing_data()\ntest_data = load_housing_data(DEFAULT_TEST_PATH)\n\nassert train_data.shape == (1460, 81)\nassert test_data.shape == (1459, 80)\nassert set(FEATURES).issubset(train_data.columns)\nassert set(FEATURES).issubset(test_data.columns)",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#pipeline-and-training",
+    "href": "core.html#pipeline-and-training",
+    "title": "core",
+    "section": "Pipeline and training",
+    "text": "Pipeline and training\nbuild_price_pipeline recreates the source feature-engine pipeline. train_price_model returns a compact result object so downstream users can inspect the trained model, data splits, and metrics without retraining.\n\nsource\n\ntrain_price_model\n\ndef train_price_model(\n    train_path:str | Path | None=None, test_size:float=0.1, random_state:int=0\n)-&gt;TrainingResult:\n\nTrain the default price model and return the fitted model, splits, and metrics.\n\nsource\n\n\nevaluate_price_model\n\ndef evaluate_price_model(\n    model:Pipeline, X_train:pd.DataFrame, X_valid:pd.DataFrame, y_train:pd.Series, y_valid:pd.Series\n)-&gt;dict[str, float]:\n\nEvaluate a fitted model on original dollar-scale prices.\n\nsource\n\n\nbuild_price_pipeline\n\ndef build_price_pipeline(\n    \n)-&gt;Pipeline:\n\nBuild the end-to-end housing price pipeline from the original script notebook.\n\nsource\n\n\nTrainingResult\n\ndef TrainingResult(\n    model:Pipeline, X_train:pd.DataFrame, X_valid:pd.DataFrame, y_train:pd.Series, y_valid:pd.Series,\n    metrics:dict[str, float]\n)-&gt;None:\n\nContainer returned by train_price_model.\n\npipeline = build_price_pipeline()\nassert pipeline.steps[-1][0] == \"Lasso\"\nassert isinstance(pipeline, Pipeline)\n\n\nresult = train_price_model()\nresult.metrics\n\n\nassert result.metrics[\"valid_r2\"] &gt; 0.80\nassert result.metrics[\"valid_rmse\"] &gt; 0\nassert result.X_train.shape[1] == len(FEATURES)\nassert result.X_valid.shape[1] == len(FEATURES)",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#prediction-and-submission",
+    "href": "core.html#prediction-and-submission",
+    "title": "core",
+    "section": "Prediction and submission",
+    "text": "Prediction and submission\nThe pipeline learns missing-value handling for the variables configured above. The Kaggle test set also has a few missing values in variables the source pipeline does not impute, so prediction defaults to dropping those rows, matching the original script notebook.\n\nsource\n\nmake_submission\n\ndef make_submission(\n    model:Pipeline, test_path:str | Path | None=None, id_column:str='Id', handle_missing:HandleMissing='drop'\n)-&gt;pd.DataFrame:\n\nCreate a Kaggle-style submission DataFrame with Id and SalePrice columns.\n\nsource\n\n\npredict_prices\n\ndef predict_prices(\n    model:Pipeline, data:pd.DataFrame, drop_id:bool=True, handle_missing:HandleMissing='drop'\n)-&gt;pd.Series:\n\nPredict house prices on the original dollar scale.\n\nsubmission = make_submission(result.model)\nsubmission.head()\n\n\nassert list(submission.columns) == [ID_COLUMN, TARGET]\nassert len(submission) == 1449\nassert submission[TARGET].notna().all()\nassert (submission[TARGET] &gt; 0).all()\n\nsample_prices = predict_prices(result.model, test_data.head(20))\nassert len(sample_prices) == 20\nassert (sample_prices &gt; 0).all()",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "core.html#persistence",
+    "href": "core.html#persistence",
+    "title": "core",
+    "section": "Persistence",
+    "text": "Persistence\nUse these helpers to save the trained pipeline and load it again for later scoring.\n\nsource\n\nload_model\n\ndef load_model(\n    path:str | Path\n)-&gt;Pipeline:\n\nLoad a model saved with save_model.\n\nsource\n\n\nsave_model\n\ndef save_model(\n    model:Pipeline, path:str | Path\n)-&gt;Path:\n\nPersist a fitted model with joblib and return the output path.\n\nmodel_path = save_model(result.model, PROJECT_ROOT / \"_proc\" / \"price_pipe.joblib\")\nloaded_model = load_model(model_path)\nloaded_prices = predict_prices(loaded_model, test_data.head(5))\nassert len(loaded_prices) == 5\nassert (loaded_prices &gt; 0).all()",
+    "crumbs": [
+      "core"
+    ]
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "house_pricing_nbdev",
+    "section": "",
+    "text": "house_pricing_nbdev software converts the ames housing workflow in into a package API. It includes the selected feature set, feature-engine preprocessing, custom sklearn-compatible transformers, Lasso price modeling, evaluation helpers, Kaggle-style submission creation, and model persistence.",
+    "crumbs": [
+      "house_pricing_nbdev"
+    ]
+  },
+  {
+    "objectID": "index.html#what-it-does",
+    "href": "index.html#what-it-does",
+    "title": "house_pricing_nbdev",
+    "section": "",
+    "text": "house_pricing_nbdev software converts the ames housing workflow in into a package API. It includes the selected feature set, feature-engine preprocessing, custom sklearn-compatible transformers, Lasso price modeling, evaluation helpers, Kaggle-style submission creation, and model persistence.",
+    "crumbs": [
+      "house_pricing_nbdev"
+    ]
+  },
+  {
+    "objectID": "index.html#installation",
+    "href": "index.html#installation",
+    "title": "house_pricing_nbdev",
+    "section": "Installation",
+    "text": "Installation\nInstall in development mode from the repository root:\npip install -e \".[dev]\"\nThen export and test notebook changes with:\nnbdev-export\nnbdev-test\nnbdev-prepare",
+    "crumbs": [
+      "house_pricing_nbdev"
+    ]
+  },
+  {
+    "objectID": "index.html#quick-start",
+    "href": "index.html#quick-start",
+    "title": "house_pricing_nbdev",
+    "section": "Quick start",
+    "text": "Quick start\nLoad the included training data from script/train.csv:\n\ntrain = load_housing_data()\ntrain.shape\n\nBuild the same end-to-end pipeline used by the original source notebook:\n\npipeline = build_price_pipeline()\npipeline.steps[-1][0]\n\nTrain and evaluate the model:\nresult = train_price_model()\nresult.metrics\nCreate predictions for the included Kaggle-style test file:\nsubmission = make_submission(result.model)\nsubmission.head()\nSave and reload a fitted model:\nmodel_path = save_model(result.model, \"models/price_pipe.joblib\")\nmodel = load_model(model_path)",
+    "crumbs": [
+      "house_pricing_nbdev"
+    ]
+  }
+]
