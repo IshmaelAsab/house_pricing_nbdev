@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "house_pricing_nbdev"
+  site-url: "https://IshmaelAsab.github.io/house_pricing_nbdev"
+  description: "House Pricing nbdev Software"
+  repo-branch: main
+  repo-url: "https://github.com/IshmaelAsab/house_pricing_nbdev"
